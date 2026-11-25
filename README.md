@@ -18,7 +18,7 @@ from the 21 Aug 2024 12 UTC run: a cold early morning, with temperatures near or
 
 - Reads the **2 m temperature** field from a WRF GRIB2 file with ecCodes (exactly one field
   per file; ambiguous or non-kelvin fields are rejected).
-- Converts kelvin to °C and draws a map of the model domain or of the southern states
+- Converts kelvin to °C and draws a map (original `jet` palette, colour scale fitted to each map's data range) of the model domain or of the southern states
   (PR, SC, RS), with coastline, country and state borders, lat/lon labels, units and a
   source credit.
 - Builds the title from the data: valid time (UTC) and, for CPTEC file names, the model run.
@@ -73,6 +73,7 @@ make figures                       # or: python scripts/make_figures.py
 | `--output FILE` | *required* | Output PNG (folders are created) |
 | `--region {domain,south}` | `domain` | Whole model grid, or PR/SC/RS; the Portuguese alias `sul` is also accepted |
 | `--shapefile FILE` | – | State boundaries with a CRS (`.shp` or zipped) to mask the field; by default Natural Earth borders are drawn |
+| `--vmin`, `--vmax` | automatic | Colour-scale limits in °C. By default each map uses the 1st–99th percentile of its own area, rounded to a tidy step (0.5/1/2/5 °C), so winter and summer maps both keep their contrast |
 | `--title TEXT` | built from the data | Custom map title |
 | `--dpi N` | `200` | PNG resolution |
 | `--verbose` | off | Debug logging and full tracebacks |
