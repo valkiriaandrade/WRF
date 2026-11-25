@@ -11,3 +11,7 @@ output/
 .coverage
 coverage.xml
 htmlcov/
+
+# WRF runs downloaded by `make data` (the committed 2024 sample stays tracked)
+data/WRF_cpt_*.grib2
+*.part
