@@ -36,6 +36,27 @@ it operationally over South America and distributes GRIB2 output; the sample fil
 
 The provider name encodes `WRF_cpt_<resolution>_<domain>_<run YYYYMMDDHH>_<valid YYYYMMDDHH>`.
 
+*Data: CPTEC/INPE – WRF 7 km, https://ftp.cptec.inpe.br/modelos/tempo/WRF/.*
+
+## Get the data
+
+The 2024 sample above is **committed**: CPTEC keeps only recent runs on its server (the archive
+currently starts in 2025), so it can no longer be downloaded. The README examples and
+`make figures` use it, so they work right after cloning.
+
+To map a current forecast, download a run from the public CPTEC/INPE server
+(`WRF/ams_07km/recortes/regioes/<YYYY>/<MM>/<DD>/<HH>/`):
+
+```bash
+make data                          # latest run, +24 h, southern Brazil (SU) domain
+python scripts/download_data.py --run 2026112500 --leads 0 24 48   # a given run and lead times
+python scripts/download_data.py --list-runs                         # runs kept on the server
+python scripts/download_data.py --dry-run                           # only list the URLs
+```
+
+Downloaded files are git-ignored, and existing files are skipped. A run or lead time that isn't
+on the server is reported by name.
+
 ## Install
 
 Python 3.10 or later. GRIB2 is read with [ecCodes](https://github.com/ecmwf/eccodes-python),
@@ -58,6 +79,10 @@ wrf-maps --input data/WRF_cpt_07KM_SU_2024082112_2024082609.grib2 --output outpu
 # Zoom on PR, SC and RS, at 300 dpi
 wrf-maps --input data/WRF_cpt_07KM_SU_2024082112_2024082609.grib2 \
          --region south --dpi 300 --output output/t2m_south.png
+
+# Latest forecast: download it, then map it (the colour scale adapts to the data)
+make data
+wrf-maps --input data/WRF_cpt_07KM_SU_<run>_<valid>.grib2 --output output/t2m_latest.png
 
 # Rebuild every figure in figures/
 make figures                       # or: python scripts/make_figures.py
@@ -84,9 +109,10 @@ make figures                       # or: python scripts/make_figures.py
 
 ```
 WRF/
-├── data/                  # sample CPTEC WRF GRIB2 file
+├── data/                  # committed 2024 sample; `make data` adds recent runs
 ├── figures/               # published maps (rebuilt with `make figures`)
 ├── scripts/
+│   ├── download_data.py   # downloads WRF runs from CPTEC/INPE (`make data`)
 │   ├── make_figures.py    # regenerates every figure in figures/
 │   └── wrf_2m_temperature.py
 ├── src/wrf_maps/
@@ -107,12 +133,16 @@ WRF/
 make install   # editable install with dev tools + pre-commit hooks (ruff)
 make test      # pytest with coverage report
 make lint      # ruff check + ruff format --check
+make data      # download the latest WRF run (manual step, never run in CI)
 make figures   # regenerate every figure in figures/ from data/
 ```
 
 On Windows without `make`, run the commands from the [Makefile](Makefile) directly, e.g.
 `python -m pytest -q --cov` or `python scripts/make_figures.py`. The first map run without a
 shapefile downloads Natural Earth borders (cached afterwards).
+
+Tests and CI never download anything: they use the committed sample, and a test fixture blocks
+network access.
 
 ## License
 

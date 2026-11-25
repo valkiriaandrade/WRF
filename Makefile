@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: install test lint format figures
+.PHONY: install test lint format data figures
 
 install:  ## Install the package with development tools and the git hooks
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -16,6 +16,9 @@ lint:  ## Check style and common errors
 format:  ## Apply ruff fixes and formatting
 	$(PYTHON) -m ruff check --fix .
 	$(PYTHON) -m ruff format .
+
+data:  ## Download the latest WRF run from CPTEC/INPE (the 2024 sample is committed)
+	$(PYTHON) scripts/download_data.py
 
 figures:  ## Regenerate every figure in figures/ from data/
 	$(PYTHON) scripts/make_figures.py
