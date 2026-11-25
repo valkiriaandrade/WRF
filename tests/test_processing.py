@@ -33,7 +33,7 @@ def test_repository_grib():
     from pathlib import Path
 
     pytest.importorskip("eccodes")
-    path = Path(__file__).parents[1] / "Dados/WRF_cpt_07KM_SU_2024082112_2024082609.grib2"
+    path = Path(__file__).parents[1] / "data/WRF_cpt_07KM_SU_2024082112_2024082609.grib2"
     values, lat, lon, valid = read_grib(path, "2 metre temperature")
     assert values.shape == lat.shape == lon.shape == (243, 214)
     assert valid == "2024-08-26 09:00:00"
