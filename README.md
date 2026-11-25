@@ -1,8 +1,8 @@
-# WRF
+# WRF Weather Model Maps
 
 **Turn CPTEC/INPE WRF regional model GRIB2 output into clean 2 m temperature maps of southern Brazil, with one Python command.**
 
-[![CI](https://github.com/valkiriaandrade/WRF/actions/workflows/tests.yml/badge.svg)](https://github.com/valkiriaandrade/WRF/actions/workflows/tests.yml)
+[![CI](https://github.com/valkiriaandrade/wrf-weather-model-maps/actions/workflows/tests.yml/badge.svg)](https://github.com/valkiriaandrade/wrf-weather-model-maps/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -63,8 +63,8 @@ Python 3.10 or later. GRIB2 is read with [ecCodes](https://github.com/ecmwf/ecco
 which installs from pip with its binaries on Windows, Linux and macOS.
 
 ```bash
-git clone https://github.com/valkiriaandrade/WRF.git
-cd WRF
+git clone https://github.com/valkiriaandrade/wrf-weather-model-maps.git
+cd wrf-weather-model-maps
 python -m venv .venv
 source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"  # or: make install
