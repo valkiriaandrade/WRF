@@ -60,7 +60,9 @@ python scripts/download_data.py --list-runs                         # every run 
 `--list-runs` walks the whole server archive, one listing per run folder, so it takes a few
 minutes; `make data` only looks for the newest run. Downloaded files are git-ignored, and existing
 files are skipped (`--overwrite` fetches them again, `--data-dir` changes the folder). A run or
-lead time that isn't on the server is reported by name.
+forecast hour that isn't in the run folder is reported with the hours that are (the 7 km
+run has 3-hourly files up to +141 h), before anything is downloaded. A download cut off midway
+is retried, never saved under its final name.
 
 ## Install
 

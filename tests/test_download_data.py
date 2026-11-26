@@ -65,8 +65,105 @@ def test_missing_run_gives_clear_error(tmp_path, download_module):
     def opener(request, timeout):
         raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
 
-    with pytest.raises(download_module.DownloadError, match="keeps only recent runs"):
+    with pytest.raises(download_module.DownloadError, match="check the run and forecast hour"):
         download_module.fetch("https://x/old.grib2", tmp_path / "old.grib2", opener=opener)
+
+
+class SizedResponse(FakeResponse):
+    """A response that announces ``size`` bytes in Content-Length (whatever it sends)."""
+
+    def __init__(self, body, size):
+        super().__init__(body)
+        self.headers = {"Content-Length": str(size)}
+
+
+def test_truncated_download_is_retried_and_never_kept(tmp_path, monkeypatch, download_module):
+    monkeypatch.setattr(download_module.time, "sleep", lambda seconds: None)
+    answers = [SizedResponse(b"GRIB", 10), SizedResponse(b"GRIB-whole", 10)]
+    dest = tmp_path / "run.grib2"
+    opener = lambda request, timeout: answers.pop(0)  # noqa: E731
+    assert download_module.fetch("https://x/run.grib2", dest, opener=opener) is True
+    assert dest.read_bytes() == b"GRIB-whole" and not answers
+
+    always_short = lambda request, timeout: SizedResponse(b"GRIB", 10)  # noqa: E731
+    with pytest.raises(download_module.DownloadError, match="received 4 of 10 bytes"):
+        download_module.fetch("https://x/b.grib2", tmp_path / "b.grib2", opener=always_short)
+    assert list(tmp_path.iterdir()) == [dest]  # no truncated file, no .part left behind
+
+
+def test_incomplete_chunked_response_is_retried(tmp_path, monkeypatch, download_module):
+    import http.client
+
+    monkeypatch.setattr(download_module.time, "sleep", lambda seconds: None)
+
+    class Broken(FakeResponse):
+        def read(self, *args):
+            raise http.client.IncompleteRead(b"GR", 8)
+
+    answers = [Broken(b""), FakeResponse(b"GRIB")]
+    dest = tmp_path / "run.grib2"
+    assert (
+        download_module.fetch("https://x/run.grib2", dest, opener=lambda r, timeout: answers.pop(0))
+        is True
+    )
+    assert dest.read_bytes() == b"GRIB"
+
+
+RUN_FOLDER = listing(
+    *(
+        f"WRF_cpt_07KM_SU_2026112400_202611{d:02d}{h:02d}.grib2"
+        for d, h in [(24, 0), (24, 3), (25, 0)]
+    ),
+    "WRF_cpt_07KM_NE_2026112400_2026112400.grib2",
+)
+
+
+def test_missing_forecast_hours_are_reported_with_the_available_ones(download_module):
+    run = datetime(2026, 11, 24)
+    items = download_module.plan(run, [0, 3, 25])
+    read = {download_module.run_url(run): RUN_FOLDER}.__getitem__
+    [message] = download_module.missing_from_run(run, items, read)
+    assert "_2026112500.grib2" not in message and "2026112501" in message
+    assert "hours available: 0 to 24 h, 3 files" in message
+    assert download_module.missing_from_run(run, download_module.plan(run, [0], "CO"), read) == [
+        "WRF_cpt_07KM_CO_2026112400_2026112400.grib2 is not in run 2026112400 "
+        "(hours available: none yet)"
+    ]
+
+
+def test_missing_run_folder_is_reported(download_module):
+    def read(url):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    run = datetime(2024, 8, 21, 12)
+    with pytest.raises(download_module.DownloadError, match="Run 2024082112 is not on the server"):
+        download_module.missing_from_run(run, download_module.plan(run, [0]), read)
+
+
+def test_main_stops_before_downloading_missing_hours(tmp_path, monkeypatch, download_module):
+    monkeypatch.setattr(download_module, "missing_from_run", lambda run, items: ["not there"])
+    monkeypatch.setattr(download_module, "download", lambda *a, **k: pytest.fail("downloaded"))
+    argv = ["--run", "2026112400", "--leads", "25", "--data-dir", str(tmp_path)]
+    assert download_module.main(argv) == 1
+
+
+@pytest.mark.parametrize("value", ["S", "SUL", "s1", "../x"])
+def test_domain_must_be_two_letters(value, download_module):
+    with pytest.raises(download_module.argparse.ArgumentTypeError):
+        download_module.parse_domain(value)
+    assert download_module.parse_domain(" ne ") == "NE"
+
+
+def test_negative_or_non_integer_leads_rejected(download_module):
+    for value in ("-3", "1.5", "x"):
+        with pytest.raises(download_module.argparse.ArgumentTypeError):
+            download_module.parse_lead(value)
+
+
+def test_sample_warning_only_for_the_repository_data_folder(tmp_path, caplog, download_module):
+    with caplog.at_level("WARNING"):
+        download_module.main(["--run", "2026112400", "--dry-run", "--data-dir", str(tmp_path)])
+    assert "is missing" not in caplog.text
 
 
 def test_main_dry_run_with_explicit_run(capsys, download_module):

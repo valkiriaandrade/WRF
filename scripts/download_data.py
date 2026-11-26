@@ -18,6 +18,7 @@ Files that already exist are skipped (use ``--overwrite`` to fetch them again).
 from __future__ import annotations
 
 import argparse
+import http.client
 import logging
 import re
 import shutil
@@ -46,12 +47,44 @@ class DownloadError(RuntimeError):
     """A file could not be downloaded."""
 
 
+class IncompleteDownload(OSError):
+    """The server closed the connection before sending the whole file."""
+
+
+def expected_size(response) -> int | None:
+    """``Content-Length`` of a response, or ``None`` when the server did not send one."""
+    headers = getattr(response, "headers", None)
+    value = headers.get("Content-Length") if headers is not None else None
+    return int(value) if value and value.strip().isdigit() else None
+
+
 @dataclass(frozen=True)
 class Item:
     """One file to download: source URL and destination relative to the data folder."""
 
     url: str
     path: Path
+
+
+def parse_domain(value: str) -> str:
+    """Two-letter regional cut-out such as ``SU`` (argparse type)."""
+    domain = value.strip().upper()
+    if not re.fullmatch(r"[A-Z]{2}", domain):
+        raise argparse.ArgumentTypeError(
+            f"invalid domain {value!r}; use two letters, e.g. SU or NE"
+        )
+    return domain
+
+
+def parse_lead(value: str) -> int:
+    """Forecast hour, a non-negative integer (argparse type)."""
+    try:
+        lead = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"invalid forecast hour {value!r}") from error
+    if lead < 0:
+        raise argparse.ArgumentTypeError(f"forecast hours cannot be negative: {lead}")
+    return lead
 
 
 def parse_run(value: str) -> datetime:
@@ -135,6 +168,41 @@ def latest_run(domain: str = DEFAULT_DOMAIN, read: Callable[[str], str] = read_t
     return runs[0]
 
 
+def missing_from_run(
+    run: datetime, items: Iterable[Item], read: Callable[[str], str] = read_text
+) -> list[str]:
+    """Messages for the items that the run folder on the server does not list.
+
+    Checked before downloading, so a forecast hour that the model does not write, or that
+    is still being uploaded for the newest run, is reported with the hours that exist.
+
+    Raises:
+        DownloadError: if the run folder itself is not on the server.
+    """
+    try:
+        names = set(list_entries(run_url(run), read))
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            raise DownloadError(
+                f"Run {run:%Y%m%d%H} is not on the server (it keeps only recent runs; "
+                "list them with --list-runs)"
+            ) from error
+        raise
+    messages = []
+    for item in items:
+        if item.path.name in names:
+            continue
+        domain = item.path.name.split("_")[3]
+        leads = sorted(
+            int((datetime.strptime(name[-16:-6], "%Y%m%d%H") - run).total_seconds() // 3600)
+            for name in names
+            if re.fullmatch(rf"WRF_cpt_07KM_{domain}_\d{{10}}_\d{{10}}\.grib2", name)
+        )
+        hours = f"{leads[0]} to {leads[-1]} h, {len(leads)} files" if leads else "none yet"
+        messages.append(f"{item.path.name} is not in run {run:%Y%m%d%H} (hours available: {hours})")
+    return messages
+
+
 def fetch(
     url: str,
     dest: Path,
@@ -146,7 +214,9 @@ def fetch(
 ) -> bool:
     """Download ``url`` to ``dest``; return False if it was skipped because it exists.
 
-    The file is written to ``<dest>.part`` first and renamed when complete.
+    The file is written to ``<dest>.part`` first and renamed only when complete: a
+    connection that drops early (fewer bytes than ``Content-Length``, or an incomplete
+    chunked response) is retried, so a truncated file never gets the final name.
 
     Raises:
         DownloadError: if the file does not exist on the server or every attempt fails.
@@ -162,17 +232,21 @@ def fetch(
             request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with opener(request, timeout=timeout) as response, partial.open("wb") as out:
                 shutil.copyfileobj(response, out)
+                expected = expected_size(response)
+            received = partial.stat().st_size
+            if expected is not None and received != expected:
+                raise IncompleteDownload(f"received {received} of {expected} bytes")
             partial.replace(dest)
             return True
         except urllib.error.HTTPError as error:
             partial.unlink(missing_ok=True)
             if error.code == 404:
                 raise DownloadError(
-                    f"Not found on the server: {url} (the server keeps only recent runs; "
-                    "list them with --list-runs)"
+                    f"Not found on the server: {url} (check the run and forecast hour; "
+                    "list the runs with --list-runs)"
                 ) from error
             last_error = error
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError) as error:
             partial.unlink(missing_ok=True)
             last_error = error
         if attempt < retries:
@@ -207,9 +281,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--run", default="latest", help="model run YYYYMMDDHH, or 'latest' available on the server"
     )
     parser.add_argument(
-        "--leads", nargs="+", type=int, default=DEFAULT_LEADS, help="forecast hours to download"
+        "--leads",
+        nargs="+",
+        type=parse_lead,
+        default=DEFAULT_LEADS,
+        help="forecast hours to download",
     )
-    parser.add_argument("--domain", default=DEFAULT_DOMAIN, help="regional cut-out, e.g. SU")
+    parser.add_argument(
+        "--domain",
+        type=parse_domain,
+        default=DEFAULT_DOMAIN,
+        help="regional cut-out: SU (south), SE, CO, NE or NT",
+    )
     parser.add_argument("--data-dir", type=Path, default=ROOT / "data")
     parser.add_argument("--overwrite", action="store_true", help="download existing files again")
     parser.add_argument("--dry-run", action="store_true", help="only list the URLs")
@@ -225,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     if (args.data_dir / SAMPLE).exists():
         logger.info("Sample used by the README and make figures is present: %s", SAMPLE)
-    else:
+    elif args.data_dir.resolve() == (ROOT / "data").resolve():
         logger.warning(
             "Committed sample %s is missing and is no longer on the server; restore it "
             "with `git checkout -- data/%s`",
@@ -238,15 +321,21 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(f"{r:%Y%m%d%H}" for r in runs) or "no runs found")
             return 0
         run = latest_run(args.domain) if args.run == "latest" else parse_run(args.run)
-    except (DownloadError, argparse.ArgumentTypeError, urllib.error.URLError) as error:
+        logger.info(
+            "Run %s, domain %s, forecast hours %s", f"{run:%Y%m%d%H}", args.domain, args.leads
+        )
+        items = plan(run, args.leads, args.domain)
+        if args.dry_run:
+            for item in items:
+                print(f"{item.url} -> {args.data_dir / item.path}")
+            return 0
+        missing = missing_from_run(run, items)
+    except (DownloadError, argparse.ArgumentTypeError, OSError) as error:
         logger.error("%s", error)
         return 1
-    logger.info("Run %s, domain %s, forecast hours %s", f"{run:%Y%m%d%H}", args.domain, args.leads)
-    items = plan(run, args.leads, args.domain)
-    if args.dry_run:
-        for item in items:
-            print(f"{item.url} -> {args.data_dir / item.path}")
-        return 0
+    if missing:
+        logger.error("Not on the server:\n  %s", "\n  ".join(missing))
+        return 1
     errors = download(items, args.data_dir, overwrite=args.overwrite)
     if errors:
         logger.error("%d file(s) could not be downloaded:\n  %s", len(errors), "\n  ".join(errors))
