@@ -37,3 +37,17 @@ Rendering was standardised and does not reproduce the historical palette pixel b
   `WRF_cpt_07KM_SU_2026112500_2026112600.grib2` downloaded and mapped with the CLI
   (automatic scale 14–28 °C).
 - Maps are drawn with filled contours (`contourf`) as in the original script.
+
+## Code review fixes (v0.3.0, 2026-11-26)
+
+- Titles name the CPTEC cut-out of the file (SU Southern Brazil, SE, CO, NE, NT) instead of
+  "Southern Brazil" for every file; the model run time now comes from the GRIB (`dataDate`,
+  `dataTime`) like the valid time. Checked on a downloaded NE file (run 2026112600, +24 h):
+  "WRF 2 m temperature (°C) – Northeast Brazil".
+- Colour range: `--vmin`/`--vmax` are used exactly as given (before, they were rounded outward
+  to the step), and the step is chosen after rounding, so a map never has more than 24 classes
+  (a −0.9…23.1 °C range used to give 25). With `--shapefile`, the automatic range comes from
+  the points inside the polygons only (for `--region south`, PR/SC/RS instead of the whole
+  box). The published figure does not use either option and is byte-identical.
+- Unused NetCDF helpers removed, with their dependencies (xarray, h5netcdf, h5py, scipy).
+- A damaged GRIB file gives a one-line error instead of a traceback.

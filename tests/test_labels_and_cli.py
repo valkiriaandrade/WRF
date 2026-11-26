@@ -7,12 +7,12 @@ import pytest
 from wrf_maps.arguments import positive_int
 from wrf_maps.cli import build_cli
 from wrf_maps.labels import (
+    domain_from_name,
     format_time,
     format_title,
     kelvin_to_celsius,
-    run_time_from_name,
 )
-from wrf_maps.regions import REGIONS, normalize_region
+from wrf_maps.regions import DOMAINS, REGIONS, domain_label, normalize_region
 
 NAME = "WRF_cpt_07KM_SU_2024082112_2024082609.grib2"
 
@@ -53,9 +53,17 @@ def test_kelvin_to_celsius_keeps_shape_and_nan():
     assert np.isnan(result[0, 1])
 
 
-def test_run_time_from_provider_name():
-    assert run_time_from_name(f"data/{NAME}") == datetime(2024, 8, 21, 12)
-    assert run_time_from_name("my_output.grib2") is None
+def test_domain_from_provider_name():
+    assert domain_from_name(f"data/{NAME}") == "SU"
+    assert domain_from_name("WRF_cpt_07KM_NE_2026112500_2026112600.grib2") == "NE"
+    assert domain_from_name("my_output.grib2") is None
+
+
+@pytest.mark.parametrize("code", ["SU", "SE", "CO", "NE", "NT"])
+def test_every_cptec_domain_has_its_own_title(code):
+    assert domain_label(code) == DOMAINS[code]
+    assert code == "SU" or "Southern" not in domain_label(code)
+    assert domain_label("XX") is None and domain_label(None) is None
 
 
 def test_title_formatting():

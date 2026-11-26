@@ -5,14 +5,13 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Sequence
-from datetime import datetime
 
 from .arguments import build_parser, execute
 from .colour_scales import CMAP, EXTEND, temperature_levels
 from .io import read_grib
-from .labels import SOURCE_CREDIT, format_title, kelvin_to_celsius, run_time_from_name
-from .plotting import plot_map
-from .regions import ALIASES, REGIONS, normalize_region
+from .labels import SOURCE_CREDIT, domain_from_name, format_title, kelvin_to_celsius
+from .plotting import mask_to_borders, plot_map
+from .regions import ALIASES, REGIONS, domain_label, normalize_region
 
 __all__ = ["build_cli", "kelvin_to_celsius", "main", "run"]
 
@@ -21,19 +20,29 @@ logger = logging.getLogger(__name__)
 
 def run(args: argparse.Namespace) -> None:
     """Read the 2 m temperature, convert it to °C and draw the map."""
-    values, lat, lon, valid_time = read_grib(args.input, "2 metre temperature")
-    logger.info("Read 2 m temperature valid at %s UTC from %s", valid_time, args.input)
+    field = read_grib(args.input, "2 metre temperature")
+    values, lat, lon = field.values, field.lat, field.lon
+    logger.info("Read 2 m temperature valid at %s UTC from %s", field.valid_time, args.input)
     region = REGIONS[args.region]
+    if args.region == "domain":
+        # The whole grid of the file: name it after the CPTEC cut-out (SU, NE, ...).
+        label = domain_label(domain_from_name(args.input))
+    else:
+        label = region.label
     celsius = kelvin_to_celsius(values)
+    states = list(region.states) if region.states else None
+    # The automatic colour range uses only what is drawn: with a shapefile, the points
+    # inside its polygons (for --region south, inside PR, SC and RS).
+    shown = (
+        mask_to_borders(celsius, lat, lon, args.shapefile, states) if args.shapefile else celsius
+    )
     levels = temperature_levels(
-        celsius, lat, lon, extent=region.extent, vmin=args.vmin, vmax=args.vmax
+        shown, lat, lon, extent=region.extent, vmin=args.vmin, vmax=args.vmax
     )
     logger.info(
         "Colour scale %g to %g °C every %g °C", levels[0], levels[-1], levels[1] - levels[0]
     )
-    title = args.title or format_title(
-        datetime.fromisoformat(valid_time), region.label, run_time_from_name(args.input)
-    )
+    title = args.title or format_title(field.valid_time, label, field.run_time)
     plot_map(
         celsius,
         lat,
@@ -46,7 +55,7 @@ def run(args: argparse.Namespace) -> None:
         extend=EXTEND,
         extend_colours=True,
         shapefile=args.shapefile,
-        states=list(region.states) if region.states else None,
+        states=states,
         extent=list(region.extent) if region.extent else None,
         credit=SOURCE_CREDIT,
         dpi=args.dpi,

@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from types import SimpleNamespace
 
 import numpy as np
@@ -18,6 +19,7 @@ def test_grib_closed_on_selection_failure(monkeypatch, tmp_path):
     path = tmp_path / "sample.grib2"
     path.touch()
     fake = SimpleNamespace(
+        GribInternalError=type("GribInternalError", (Exception,), {}),
         codes_grib_new_from_file=lambda stream: next(messages),
         codes_get=lambda message, key: "other",
         codes_release=lambda message: closed.append(message),
@@ -34,8 +36,10 @@ def test_repository_grib():
 
     pytest.importorskip("eccodes")
     path = Path(__file__).parents[1] / "data/WRF_cpt_07KM_SU_2024082112_2024082609.grib2"
-    values, lat, lon, valid = read_grib(path, "2 metre temperature")
+    field = read_grib(path, "2 metre temperature")
+    values, lat, lon = field.values, field.lat, field.lon
     assert values.shape == lat.shape == lon.shape == (243, 214)
-    assert valid == "2024-08-26 09:00:00"
+    assert field.valid_time == datetime(2024, 8, 26, 9)
+    assert field.run_time == datetime(2024, 8, 21, 12)  # from the GRIB, matches the file name
     assert np.nanmin(values) > 200
     assert np.nanmax(values) < 350

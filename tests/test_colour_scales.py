@@ -32,8 +32,29 @@ def test_explicit_vmin_vmax_and_partial_override():
     levels = temperature_levels(field(0, 30), LAT, LON, vmin=-3, vmax=15)
     np.testing.assert_allclose(levels, np.arange(-3, 16, 1))
     assert temperature_levels(field(0, 30), LAT, LON, vmin=10)[0] == 10
-    with pytest.raises(ValueError, match="lower than"):
+    with pytest.raises(ValueError, match="needs --vmin 5 °C below --vmax 5 °C"):
         temperature_levels(field(0, 30), LAT, LON, vmin=5, vmax=5)
+
+
+def test_error_names_the_automatic_end_not_an_option_the_user_did_not_pass():
+    with pytest.raises(ValueError, match=r"--vmin 40 °C below automatic upper end 29\.\d °C"):
+        temperature_levels(field(0, 30), LAT, LON, vmin=40)
+
+
+def test_explicit_ends_are_kept_exactly():
+    levels = temperature_levels(field(0, 30), LAT, LON, vmin=0.3, vmax=9.8)
+    assert levels[0] == 0.3 and levels[-1] == 9.8
+    np.testing.assert_allclose(np.diff(levels[1:-1]), 0.5)
+
+
+@pytest.mark.parametrize(("low", "high"), [(-0.9, 23.1), (0.1, 24.1), (-12.3, 35.9), (0.2, 11.9)])
+def test_never_more_than_max_classes_after_rounding(low, high):
+    from wrf_maps.colour_scales import MAX_CLASSES
+
+    for kwargs in ({}, {"vmin": low, "vmax": high}):
+        levels = temperature_levels(field(low, high), LAT, LON, **kwargs)
+        assert len(levels) - 1 <= MAX_CLASSES
+        assert np.all(np.diff(levels) > 0)
 
 
 def test_range_ignores_nan_and_points_outside_extent():

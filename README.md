@@ -22,7 +22,9 @@ from the 21 Aug 2024 12 UTC run: a cold early morning, with temperatures near or
 - Converts kelvin to °C and draws a map (original `jet` palette, colour scale fitted to each map's data range) of the model domain or of the southern states
   (PR, SC, RS), with coastline, country and state borders, lat/lon labels, units and a
   source credit.
-- Builds the title from the data: valid time (UTC) and, for CPTEC file names, the model run.
+- Builds the title from the data: the region (for the whole grid, the CPTEC cut-out named in the
+  file: SU Southern Brazil, SE Southeast, CO Central-West, NE Northeast, NT North Brazil), and the
+  valid time and model run (UTC) stored in the GRIB.
 
 ## Data source
 
@@ -103,9 +105,9 @@ make figures                       # or: python scripts/make_figures.py
 |---|---|---|
 | `--input FILE` | *required* | WRF GRIB2 file; exactly one of its fields must be the 2 m temperature |
 | `--output FILE` | *required* | Output PNG (folders are created) |
-| `--region {domain,south}` | `domain` | Whole model grid, or PR/SC/RS; the Portuguese alias `sul` is also accepted |
+| `--region {domain,south}` | `domain` | Whole model grid of the file (titled after its cut-out), or PR/SC/RS; the Portuguese alias `sul` is also accepted |
 | `--shapefile FILE` | – | State boundaries with a CRS (`.shp` or zipped) to mask the field; `--region south` needs a `SIGLA_UF` column to select PR, SC and RS. By default Natural Earth borders are drawn |
-| `--vmin`, `--vmax` | automatic | Colour-scale limits in °C. By default each map uses the 1st–99th percentile of its own area, rounded to a tidy step (0.5/1/2/5 °C), so winter and summer maps both keep their contrast |
+| `--vmin`, `--vmax` | automatic | Colour-scale limits in °C, used exactly as given. By default each map uses the 1st–99th percentile of what it shows (with `--shapefile`, only the points inside the polygons; for `--region south`, PR, SC and RS), rounded outward to a tidy step (0.5/1/2/5/10 °C, at most 24 classes), so winter and summer maps both keep their contrast |
 | `--title TEXT` | built from the data | Custom map title |
 | `--dpi N` | `200` | PNG resolution |
 | `--verbose` | off | Debug logging and full tracebacks |
