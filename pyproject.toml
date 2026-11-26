@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wrf-maps"
-version = "0.2.0"
+version = "0.3.0"
 description = "WRF regional model GRIB2 output to 2 m temperature maps for southern Brazil"
 readme = "README.md"
 license = "MIT"

@@ -6,15 +6,21 @@
 - Map produced in `output/temperature.png` from the real data with local state boundaries.
 - Editable install of the package and Ruff checks executed.
 
-The API requires exactly one 2 m temperature field per file. Reduced grids are not
+Exactly one of the GRIB messages in a file must be the 2 m temperature (the sample holds 305). Reduced grids are not
 supported. The shapefile mask is optional; by default the map keeps the GRIB area.
 Rendering was standardised and does not reproduce the historical palette pixel by pixel.
 
 ## English translation and figure regeneration (v0.2.0)
 
 - Folders and files renamed to English; code, CLI help, messages, titles and labels
-  translated. The kelvin → °C conversion, palette (`coolwarm`) and class levels
-  (−10 to 44 °C every 2 °C) are unchanged.
+  translated. The kelvin → °C conversion is unchanged.
+- Colour scale: the original `jet` palette, both ends extended, as in
+  `Scripts/2m_temperatura.py`. The original fixed −3 to 15 °C range was replaced by levels
+  fitted to each map: the 1st–99th percentile of the map area, rounded outward to a tidy step
+  (0.5, 1, 2, 5 or 10 °C, at most 24 classes). `--vmin`/`--vmax` fix either end. The sample map
+  uses −1 to 17 °C every 1 °C. The first English version used `coolwarm` with fixed −10 to 44 °C
+  levels; commit 95868ab ("Restore the jet palette with data-fitted levels") replaced it, because
+  the winter sample used only a few of those colours.
 - `figures/wrf_2m_temperature_2024-08-26_09utc.png` regenerated with `make figures`.
 - The original figure was titled "6h" (local time, UTC−3); the regenerated title uses
   the GRIB valid time in UTC (09 UTC), plus the model run time taken from the file name.
