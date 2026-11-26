@@ -16,12 +16,15 @@ from the 21 Aug 2024 12 UTC run: a cold early morning, with temperatures near or
 
 ## What it does
 
-- Reads the **2 m temperature** field from a WRF GRIB2 file with ecCodes (exactly one field
-  per file; ambiguous or non-kelvin fields are rejected).
+- Reads the **2 m temperature** field from a WRF GRIB2 file with ecCodes. A CPTEC file holds
+  hundreds of fields (the sample has 305 GRIB messages); exactly one of them must be the 2 m
+  temperature, in kelvin, otherwise the file is rejected.
 - Converts kelvin to °C and draws a map (original `jet` palette, colour scale fitted to each map's data range) of the model domain or of the southern states
   (PR, SC, RS), with coastline, country and state borders, lat/lon labels, units and a
   source credit.
-- Builds the title from the data: valid time (UTC) and, for CPTEC file names, the model run.
+- Builds the title from the data: the region (for the whole grid, the CPTEC cut-out named in the
+  file: SU Southern Brazil, SE Southeast, CO Central-West, NE Northeast, NT North Brazil), and the
+  valid time and model run (UTC) stored in the GRIB.
 
 ## Data source
 
@@ -32,7 +35,7 @@ it operationally over South America and distributes GRIB2 output; the sample fil
 
 | File | Content |
 |---|---|
-| `data/WRF_cpt_07KM_SU_2024082112_2024082609.grib2` | Run 21 Aug 2024 12 UTC, valid 26 Aug 2024 09 UTC (243 × 214 grid) |
+| `data/WRF_cpt_07KM_SU_2024082112_2024082609.grib2` | Run 21 Aug 2024 12 UTC, valid 26 Aug 2024 09 UTC (243 × 214 grid, 305 fields) |
 
 The provider name encodes `WRF_cpt_<resolution>_<domain>_<run YYYYMMDDHH>_<valid YYYYMMDDHH>`.
 
@@ -50,12 +53,18 @@ To map a current forecast, download a run from the public CPTEC/INPE server
 ```bash
 make data                          # latest run, +24 h, southern Brazil (SU) domain
 python scripts/download_data.py --run 2026112500 --leads 0 24 48   # a given run and lead times
-python scripts/download_data.py --list-runs                         # runs kept on the server
+python scripts/download_data.py --domain NE                         # another regional cut-out
 python scripts/download_data.py --dry-run                           # only list the URLs
+python scripts/download_data.py --list-runs                         # every run kept on the server
 ```
 
-Downloaded files are git-ignored, and existing files are skipped. A run or lead time that isn't
-on the server is reported by name.
+`--domain` selects the regional cut-out: `SU` (south, default), `SE`, `CO`, `NE` or `NT`.
+`--list-runs` walks the whole server archive, one listing per run folder, so it takes a few
+minutes; `make data` only looks for the newest run. Downloaded files are git-ignored, and existing
+files are skipped (`--overwrite` fetches them again, `--data-dir` changes the folder). A run or
+forecast hour that isn't in the run folder is reported with the hours that are (the 7 km
+run has 3-hourly files up to +141 h), before anything is downloaded. A download cut off midway
+is retried, never saved under its final name.
 
 ## Install
 
@@ -94,11 +103,11 @@ make figures                       # or: python scripts/make_figures.py
 
 | Option | Default | Description |
 |---|---|---|
-| `--input FILE` | *required* | GRIB2 file with exactly one 2 m temperature field |
+| `--input FILE` | *required* | WRF GRIB2 file; exactly one of its fields must be the 2 m temperature |
 | `--output FILE` | *required* | Output PNG (folders are created) |
-| `--region {domain,south}` | `domain` | Whole model grid, or PR/SC/RS; the Portuguese alias `sul` is also accepted |
-| `--shapefile FILE` | – | State boundaries with a CRS (`.shp` or zipped) to mask the field; by default Natural Earth borders are drawn |
-| `--vmin`, `--vmax` | automatic | Colour-scale limits in °C. By default each map uses the 1st–99th percentile of its own area, rounded to a tidy step (0.5/1/2/5 °C), so winter and summer maps both keep their contrast |
+| `--region {domain,south}` | `domain` | Whole model grid of the file (titled after its cut-out), or PR/SC/RS; the Portuguese alias `sul` is also accepted |
+| `--shapefile FILE` | – | State boundaries with a CRS (`.shp` or zipped) to mask the field; `--region south` needs a `SIGLA_UF` column to select PR, SC and RS. By default Natural Earth borders are drawn |
+| `--vmin`, `--vmax` | automatic | Colour-scale limits in °C, used exactly as given. By default each map uses the 1st–99th percentile of what it shows (with `--shapefile`, only the points inside the polygons; for `--region south`, PR, SC and RS), rounded outward to a tidy step (0.5/1/2/5/10 °C, at most 24 classes), so winter and summer maps both keep their contrast |
 | `--title TEXT` | built from the data | Custom map title |
 | `--dpi N` | `200` | PNG resolution |
 | `--verbose` | off | Debug logging and full tracebacks |
@@ -108,7 +117,7 @@ make figures                       # or: python scripts/make_figures.py
 ## Project structure
 
 ```
-WRF/
+wrf-weather-model-maps/
 ├── data/                  # committed 2024 sample; `make data` adds recent runs
 ├── figures/               # published maps (rebuilt with `make figures`)
 ├── scripts/
@@ -119,6 +128,7 @@ WRF/
 │   ├── cli.py             # command-line interface
 │   ├── io.py              # GRIB2 reading with ecCodes
 │   ├── plotting.py        # shared map style and rendering
+│   ├── colour_scales.py   # palette and data-fitted class levels
 │   ├── labels.py          # K → °C, titles and run metadata
 │   └── regions.py         # map domains and region aliases
 ├── tests/                 # pytest suite (synthetic data + the real GRIB2 file)
@@ -131,7 +141,7 @@ WRF/
 
 ```bash
 make install   # editable install with dev tools + pre-commit hooks (ruff)
-make test      # pytest with coverage report
+make test      # pytest with coverage report (fails below 85%)
 make lint      # ruff check + ruff format --check
 make data      # download the latest WRF run (manual step, never run in CI)
 make figures   # regenerate every figure in figures/ from data/
@@ -146,7 +156,12 @@ network access.
 
 ## License
 
-[MIT](LICENSE) © Valkiria Andrade.
+Code: [MIT](LICENSE) © Valkiria Andrade.
+
+The WRF sample in `data/` and any downloaded run are CPTEC/INPE model output; they are not
+covered by the MIT licence. Cite CPTEC/INPE when you publish maps made from them, and ask
+CPTEC/INPE (atende.cptec@inpe.br) about any other use. Without `--shapefile`, coastlines and
+borders come from [Natural Earth](https://www.naturalearthdata.com/) (public domain).
 
 ---
 

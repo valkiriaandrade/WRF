@@ -16,13 +16,32 @@ class Region:
     states: tuple[str, ...] | None = None
 
 
+#: CPTEC WRF 7 km regional cut-outs (the code in the file name) and their names in titles.
+DOMAINS: dict[str, str] = {
+    "SU": "Southern Brazil",
+    "SE": "Southeast Brazil",
+    "CO": "Central-West Brazil",
+    "NE": "Northeast Brazil",
+    "NT": "North Brazil",
+}
+
 REGIONS: dict[str, Region] = {
-    "domain": Region("domain", "Southern Brazil"),
+    # The label of the whole grid depends on the file: see domain_label().
+    "domain": Region("domain", "WRF domain"),
     "south": Region("south", "PR, SC and RS", (-57.6, -48.0, -33.75, -22.5), ("PR", "SC", "RS")),
 }
 
 #: Portuguese names kept for consistency with the other projects of this portfolio.
 ALIASES: dict[str, str] = {"sul": "south"}
+
+
+def domain_label(domain: str | None) -> str | None:
+    """Title name of a CPTEC cut-out code; ``None`` (no region in the title) if unknown.
+
+    >>> domain_label("NE"), domain_label(None)
+    ('Northeast Brazil', None)
+    """
+    return DOMAINS.get(domain) if domain else None
 
 
 def normalize_region(value: str) -> str:

@@ -24,12 +24,14 @@ def kelvin_to_celsius(values):
     return np.asanyarray(values, dtype=float) - ABSOLUTE_ZERO_CELSIUS
 
 
-def run_time_from_name(path: str | Path) -> datetime | None:
-    """Model initialisation time from a CPTEC WRF file name, if it follows the pattern."""
+def domain_from_name(path: str | Path) -> str | None:
+    """Regional cut-out code (``SU``, ``NE``, …) from a CPTEC WRF file name, if it has one.
+
+    >>> domain_from_name("data/WRF_cpt_07KM_NE_2026112500_2026112600.grib2")
+    'NE'
+    """
     match = _PROVIDER_NAME.search(Path(path).name)
-    if not match:
-        return None
-    return datetime.strptime(match.group(3), "%Y%m%d%H")
+    return match.group(2) if match else None
 
 
 def format_time(stamp: datetime) -> str:
