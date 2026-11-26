@@ -51,3 +51,7 @@ Rendering was standardised and does not reproduce the historical palette pixel b
   box). The published figure does not use either option and is byte-identical.
 - Unused NetCDF helpers removed, with their dependencies (xarray, h5netcdf, h5py, scipy).
 - A damaged GRIB file gives a one-line error instead of a traceback.
+- New tests run the published map command offline on the sample (title, levels, palette),
+  check its geolocation (corners, and the −4.6 °C minimum at São Joaquim, SC), the PR/SC/RS
+  colour range, every `read_grib` rejection, truncated downloads and `make figures` failures.
+  Coverage, now including `scripts/` and branches: 72% → 87%.

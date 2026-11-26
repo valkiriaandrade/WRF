@@ -43,6 +43,9 @@ addopts = "--doctest-modules"
 source = ["wrf_maps", "scripts"]
 branch = true
 
+[tool.coverage.report]
+fail_under = 85
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

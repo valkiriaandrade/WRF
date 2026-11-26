@@ -141,7 +141,7 @@ wrf-weather-model-maps/
 
 ```bash
 make install   # editable install with dev tools + pre-commit hooks (ruff)
-make test      # pytest with coverage report
+make test      # pytest with coverage report (fails below 85%)
 make lint      # ruff check + ruff format --check
 make data      # download the latest WRF run (manual step, never run in CI)
 make figures   # regenerate every figure in figures/ from data/
